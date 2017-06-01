@@ -5,6 +5,8 @@ from collections import defaultdict
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.svm import LinearSVC
 from sklearn.externals import joblib
+import numpy
+import os
 
 MODEL_FILE = './data/trained_model.pkl'
 FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
@@ -23,7 +25,7 @@ def runArgParser():
   parser_test.add_argument('file', metavar='FILE', help='File containing test data.')
   # classify 
   parser_class = subparsers.add_parser('class', help='Classify a single message using the trained model.')
-  parser_test.add_argument('message', metavar='MSG', help='The message to classify')
+  parser_class.add_argument('message', metavar='MSG', help='The message to classify')
 
   return parser.parse_args();
 
@@ -56,10 +58,12 @@ def extractFeatures(textData):
 
 
 def trainModel(filename):
+  
+  featureList = []
+  label_list = []
+
   with open(filename) as f:
     # process each message
-    featureList = []
-    labelList = []
     for line in f:
       messageLine = json.loads(line)
       # only process if text message
@@ -71,20 +75,53 @@ def trainModel(filename):
         features = extractFeatures(textData)
         lineData['data'] = textData
         lineData['features'] = features
-        labelList.append(lineData['class'])
+        label_list.append(lineData['class'])
         featureList.append(lineData['features'])
-    # return
-    feat_vector = DictVectorizer().fit(featureList)
-    X_train = feat_vector.transform(featureList)
-    classifier = LinearSVC().fit(X_train, labelList)
+  # return
+  feat_vector = DictVectorizer().fit(featureList)
+  X_train = feat_vector.transform(featureList)
+  classifier = LinearSVC().fit(X_train, label_list)
 
-    # save the trained model to disk
-    joblib.dump(classifier, MODEL_FILE)
-    # save the fitted feature vector
-    joblib.dump(feat_vector, FEAT_VECTOR_FILE) 
+  # save the trained model to disk
+  joblib.dump(classifier, MODEL_FILE)
+  # save the fitted feature vector
+  joblib.dump(feat_vector, FEAT_VECTOR_FILE) 
 
-def testModel():
-  pass
+def testModel(filename):
+  if not os.path.isfile(MODEL_FILE) or not os.path.isfile(FEAT_VECTOR_FILE):
+    print('Model "' + MODEL_FILE +'" not found.')
+    print('be sure to train model first!')
+    return 
+
+  featureList = []
+  label_list = []
+
+  with open(filename) as f:
+    # process each message
+    for line in f:
+      messageLine = json.loads(line)
+      # only process if text message
+      if 'text' in messageLine:
+        lineData = {
+          'class': messageLine['from']['print_name']
+        }
+        textData = preprocessText(messageLine['text'])
+        features = extractFeatures(textData)
+        lineData['data'] = textData
+        lineData['features'] = features
+        label_list.append(lineData['class'])
+        featureList.append(lineData['features'])
+
+  feat_vector = joblib.load(FEAT_VECTOR_FILE)
+  X_test = feat_vector.transform(featureList)
+
+  classifier = joblib.load(MODEL_FILE)
+
+  test_pred = classifier.predict(X_test)
+  # print(len(test_pred))
+  # print(len(label_list))
+  acc = numpy.mean(test_pred == label_list) * 100
+  print('Accuracy: ' + str(acc))
 
 def classifyMessage():
   pass
@@ -95,7 +132,7 @@ def main():
   if args.command == 'train':
     trainModel(args.file)
   elif args.command == 'test':
-    testMOdel()
+    testModel(args.file)
   elif args.command == 'class':
     classifyMessage()
 
