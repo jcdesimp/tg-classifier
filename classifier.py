@@ -30,12 +30,13 @@ def runArgParser():
   return parser.parse_args();
 
 def preprocessText(textString):
-  '''given a telegram message, preprocess it and return a dictionary
+  '''given a telegram message, pre-process it and return a dictionary
     {
       "raw": "The Original Message",
       "tokens": ['tokenized', 'array', 'of', 'words'],
       "pos_tags": [('tag','V'),('words','NN')],
       "token_set": {'bag', 'of', 'unique', 'words'},
+      "bigrams": [('two', 'words')]
     }
   '''
   textData = {}
@@ -43,16 +44,24 @@ def preprocessText(textString):
   textData['tokens'] = nltk.tokenize.word_tokenize(textString)
   textData['pos_tags'] = nltk.pos_tag(textData['tokens'])
   textData['token_set'] = { x.lower() for x in textData['tokens'] }
+  textData['bigrams'] = grams = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
 
   return textData
 
 def extractFeatures(textData):
   '''extract features from the text data and return a dictionary of features'''
   features = defaultdict(int)
-
-  # contains word
+  # iterate bigrams
+  for t in textData['bigrams']:
+    features['has_bigram_' + str(t)] = True
+  # itertate set of tokens
   for t in textData['token_set']:
-    features[t] = True
+    # contains token at all
+    features['has_word_' + t] = True
+  # iterate all tokens
+  for t in textData['tokens']:
+    features['count_' + t.lower()] += 1
+
 
   return features
 
@@ -72,6 +81,9 @@ def trainModel(filename):
           'class': messageLine['from']['print_name']
         }
         textData = preprocessText(messageLine['text'])
+        # check if its worth keeping
+        if len(textData['tokens']) < 4:
+          continue
         features = extractFeatures(textData)
         lineData['data'] = textData
         lineData['features'] = features
@@ -106,6 +118,8 @@ def testModel(filename):
           'class': messageLine['from']['print_name']
         }
         textData = preprocessText(messageLine['text'])
+        if len(textData['tokens']) < 4:
+          continue
         features = extractFeatures(textData)
         lineData['data'] = textData
         lineData['features'] = features
