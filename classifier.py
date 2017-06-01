@@ -36,7 +36,8 @@ def preprocessText(textString):
       "tokens": ['tokenized', 'array', 'of', 'words'],
       "pos_tags": [('tag','V'),('words','NN')],
       "token_set": {'bag', 'of', 'unique', 'words'},
-      "bigrams": [('two', 'words')]
+      "bigrams": [('two', 'words')],
+      "trigrams": [('now', 'three', 'words')],
     }
   '''
   textData = {}
@@ -44,7 +45,8 @@ def preprocessText(textString):
   textData['tokens'] = nltk.tokenize.word_tokenize(textString)
   textData['pos_tags'] = nltk.pos_tag(textData['tokens'])
   textData['token_set'] = { x.lower() for x in textData['tokens'] }
-  textData['bigrams'] = grams = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
+  textData['bigrams'] = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
+  textData['trigrams'] = [tuple(textData['tokens'][i:i+3]) for i in range(len(textData['tokens'])-3+1)]
 
   return textData
 
@@ -54,6 +56,9 @@ def extractFeatures(textData):
   # iterate bigrams
   for t in textData['bigrams']:
     features['has_bigram_' + str(t)] = True
+  # iterate trigrams
+  for t in textData['trigrams']:
+    features['has_trigram_' + str(t)] = True
   # itertate set of tokens
   for t in textData['token_set']:
     # contains token at all
@@ -137,8 +142,20 @@ def testModel(filename):
   acc = numpy.mean(test_pred == label_list) * 100
   print('Accuracy: ' + str(acc))
 
-def classifyMessage():
-  pass
+def classifyMessage(message):
+
+
+  textData = preprocessText(message)
+  if len(textData['tokens']) < 4:
+    print("Message too short to accurately classify!")
+    return
+  features = extractFeatures(textData)
+
+  feat_vector = joblib.load(FEAT_VECTOR_FILE)
+  X_test = feat_vector.transform([features])
+
+  classifier = joblib.load(MODEL_FILE)
+  print(classifier.predict(X_test)[0])
 
 def main():
   '''main program execution'''
@@ -148,7 +165,7 @@ def main():
   elif args.command == 'test':
     testModel(args.file)
   elif args.command == 'class':
-    classifyMessage()
+    classifyMessage(args.message)
 
 
 
