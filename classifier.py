@@ -1,7 +1,13 @@
 import argparse
 import json
 import nltk
+from collections import defaultdict
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.externals import joblib
 
+MODEL_FILE = './data/trained_model.pkl'
+FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
 
 def runArgParser():
   '''parse commandline arguments'''
@@ -40,18 +46,42 @@ def preprocessText(textString):
 
 def extractFeatures(textData):
   '''extract features from the text data and return a dictionary of features'''
-  features = defaultdict()
+  features = defaultdict(int)
+
+  # contains word
+  for t in textData['token_set']:
+    features[t] = True
+
+  return features
 
 
 def trainModel(filename):
   with open(filename) as f:
     # process each message
+    featureList = []
+    labelList = []
     for line in f:
       messageLine = json.loads(line)
       # only process if text message
-      if messageLine['text']:
-        print(preprocessText(messageLine['text']))
-        return
+      if 'text' in messageLine:
+        lineData = {
+          'class': messageLine['from']['print_name']
+        }
+        textData = preprocessText(messageLine['text'])
+        features = extractFeatures(textData)
+        lineData['data'] = textData
+        lineData['features'] = features
+        labelList.append(lineData['class'])
+        featureList.append(lineData['features'])
+    # return
+    feat_vector = DictVectorizer().fit(featureList)
+    X_train = feat_vector.transform(featureList)
+    classifier = LinearSVC().fit(X_train, labelList)
+
+    # save the trained model to disk
+    joblib.dump(classifier, MODEL_FILE)
+    # save the fitted feature vector
+    joblib.dump(feat_vector, FEAT_VECTOR_FILE) 
 
 def testModel():
   pass
