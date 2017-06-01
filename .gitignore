@@ -292,3 +292,4 @@ $RECYCLE.BIN/
 # Ignore training/test data
 data/*.jsonl
 data/*.json
+data/*.pkl
