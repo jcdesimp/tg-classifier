@@ -3,13 +3,22 @@ import json
 import nltk
 from collections import defaultdict
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.svm import LinearSVC
+from sklearn.feature_selection import SelectKBest, chi2, f_classif
+from sklearn.svm import LinearSVC, SVC
+from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.neural_network import MLPClassifier
 from sklearn.externals import joblib
 import numpy
 import os
 
 MODEL_FILE = './data/trained_model.pkl'
 FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
+MIN_SAMPLE_SIZE = 5
+
+def initializeClassifier():
+  return LinearSVC()
 
 def runArgParser():
   '''parse commandline arguments'''
@@ -47,12 +56,39 @@ def preprocessText(textString):
   textData['token_set'] = { x.lower() for x in textData['tokens'] }
   textData['bigrams'] = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
   textData['trigrams'] = [tuple(textData['tokens'][i:i+3]) for i in range(len(textData['tokens'])-3+1)]
+  textData['pos_bigrams'] = [tuple(textData['pos_tags'][i:i+2][1]) for i in range(len(textData['pos_tags'])-2+1)]
 
   return textData
 
 def extractFeatures(textData):
   '''extract features from the text data and return a dictionary of features'''
   features = defaultdict(int)
+  # iterate pos_tags
+  for i in range(len(textData['pos_tags'])):
+    curr_word = textData['pos_tags'][i]
+    # features['word+' + str(i)] = curr_word[0].lower()
+    # features['pos+' + str(i)] = curr_word[1]
+    # features['word-' + str(i - len(textData['pos_tags'])-1)] = curr_word[0].lower()
+    # features['pos-' + str(i - len(textData['pos_tags'])-1)] = curr_word[1]
+    # ensure at least 1 word in
+    # if i >= 1:
+      # features['word_' + curr_word[0].lower() + '-1'] = textData['pos_tags'][i-1][0].lower()
+      # features['pos_' + curr_word[1] + '-1'] = textData['pos_tags'][i-1][1]
+    # ensure 1 word left
+    # if i < len(textData['pos_tags']) - 1:
+    #   features['word_' + curr_word[0].lower() + '+1'] = textData['pos_tags'][i+1][0].lower()
+    #   features['pos_' + curr_word[1] + '+1'] = textData['pos_tags'][i+1][1]
+    # ensure at least 2 words in
+    if i >= 2:
+      features['word_' + curr_word[0].lower() + '-2'] = textData['pos_tags'][i-2][0].lower()
+      features['pos_' + curr_word[1] + '-2'] = textData['pos_tags'][i-2][1]
+    # ensure 2 words left
+    if i < len(textData['pos_tags']) - 2:
+      features['word_' + curr_word[0].lower() + '+2'] = textData['pos_tags'][i+2][0].lower()
+      features['pos_' + curr_word[1] + '+2'] = textData['pos_tags'][i+2][1]
+  # iterate POS bigrams
+  for t in textData['pos_bigrams']:
+    features['has_pos_bigram_' + str(t)] = True
   # iterate bigrams
   for t in textData['bigrams']:
     features['has_bigram_' + str(t)] = True
@@ -87,7 +123,7 @@ def trainModel(filename):
         }
         textData = preprocessText(messageLine['text'])
         # check if its worth keeping
-        if len(textData['tokens']) < 4:
+        if len(textData['tokens']) < MIN_SAMPLE_SIZE:
           continue
         features = extractFeatures(textData)
         lineData['data'] = textData
@@ -95,9 +131,15 @@ def trainModel(filename):
         label_list.append(lineData['class'])
         featureList.append(lineData['features'])
   # return
-  feat_vector = DictVectorizer().fit(featureList)
+  vectorizer = DictVectorizer()
+
+  feat_vector_unrestricted = vectorizer.fit_transform(featureList)
+  # X_unrestricted = feat_
+  support = SelectKBest(chi2, k=30).fit(feat_vector_unrestricted, label_list)
+  vectorizer.restrict(support.get_support())
+  feat_vector = vectorizer.fit(featureList)
   X_train = feat_vector.transform(featureList)
-  classifier = LinearSVC().fit(X_train, label_list)
+  classifier =  initializeClassifier().fit(X_train, label_list)
 
   # save the trained model to disk
   joblib.dump(classifier, MODEL_FILE)
@@ -123,7 +165,7 @@ def testModel(filename):
           'class': messageLine['from']['print_name']
         }
         textData = preprocessText(messageLine['text'])
-        if len(textData['tokens']) < 4:
+        if len(textData['tokens']) < MIN_SAMPLE_SIZE:
           continue
         features = extractFeatures(textData)
         lineData['data'] = textData
