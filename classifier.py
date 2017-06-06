@@ -36,6 +36,10 @@ def runArgParser():
   parser_class = subparsers.add_parser('class', help='Classify a single message using the trained model.')
   parser_class.add_argument('message', metavar='MSG', help='The message to classify')
 
+  # training data metrics 
+  parser_metrics = subparsers.add_parser('metrics', help='Print metrics about the given training or test data.')
+  parser_metrics.add_argument('file', metavar='FILE', help='File containing training or test data.')
+
   return parser.parse_args();
 
 def preprocessText(textString):
@@ -52,6 +56,7 @@ def preprocessText(textString):
   textData = {}
   textData['raw'] = textString
   textData['tokens'] = nltk.tokenize.word_tokenize(textString)
+  textData['tokens_no_stops'] = [word for word in textData['tokens'] if word not in nltk.corpus.stopwords.words('english')]
   textData['pos_tags'] = nltk.pos_tag(textData['tokens'])
   textData['token_set'] = { x.lower() for x in textData['tokens'] }
   textData['bigrams'] = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
@@ -207,6 +212,35 @@ def classifyMessage(message):
   for r in results:
     print(r[0].ljust(20), r[1]*100)
 
+def calcTrainingMetrics(filename):
+  wordCounts = defaultdict(int)
+  userCounts = defaultdict(int)
+  with open(filename) as f:
+    # process each message
+    for line in f:
+      messageLine = json.loads(line)
+      # only process if text message
+      if 'text' in messageLine:
+        lineData = {
+          'class': messageLine['from']['print_name']
+        }
+        textData = preprocessText(messageLine['text'])
+        # check if its worth keeping
+        if len(textData['tokens']) < MIN_SAMPLE_SIZE:
+          continue
+        for t in textData['tokens_no_stops']:
+          wordCounts[t.lower()] += 1
+        userCounts[messageLine['from']['print_name']] += 1
+  
+  print("User Sampling")
+  userCounts = [ (k,v) for k, v in userCounts.items() ]
+  userCounts.sort(key=lambda r: r[1], reverse=True)
+  print('Rank'.ljust(7) + 'Person'.ljust(25) + 'Sample Count')
+  print('-'*50)
+  for i, v in enumerate(userCounts):
+    print((str(i+1) + '.').ljust(7) + str(v[0]).ljust(25) + str(v[1]))
+  
+
 def main():
   '''main program execution'''
   args = runArgParser()
@@ -216,6 +250,8 @@ def main():
     testModel(args.file)
   elif args.command == 'class':
     classifyMessage(args.message)
+  elif args.command == 'metrics':
+    calcTrainingMetrics(args.file)
 
 
 
