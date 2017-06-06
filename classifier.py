@@ -18,7 +18,7 @@ FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
 MIN_SAMPLE_SIZE = 5
 
 def initializeClassifier():
-  return LinearSVC()
+  return SVC(kernel='linear', probability=True)
 
 def runArgParser():
   '''parse commandline arguments'''
@@ -197,7 +197,15 @@ def classifyMessage(message):
   X_test = feat_vector.transform([features])
 
   classifier = joblib.load(MODEL_FILE)
-  print(classifier.predict(X_test)[0])
+  probs = classifier.predict_proba(X_test)
+  results = []
+  for i, v in enumerate(probs[0]):
+    results.append((classifier.classes_[i], v))
+
+  results.sort(key=lambda r: r[1], reverse=True)
+
+  for r in results:
+    print(r[0].ljust(20), r[1]*100)
 
 def main():
   '''main program execution'''
