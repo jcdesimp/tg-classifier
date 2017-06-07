@@ -70,6 +70,7 @@ def preprocessText(textString):
   textData['tokens_no_stops'] = [word for word in textData['tokens'] if word not in nltk.corpus.stopwords.words('english')]
   textData['pos_tags'] = nltk.pos_tag(textData['tokens'])
   textData['token_set'] = { x.lower() for x in textData['tokens'] }
+  textData['token_set_no_stops'] = { x.lower() for x in textData['tokens_no_stops'] }
   textData['bigrams'] = [tuple(textData['tokens'][i:i+2]) for i in range(len(textData['tokens'])-2+1)]
   textData['trigrams'] = [tuple(textData['tokens'][i:i+3]) for i in range(len(textData['tokens'])-3+1)]
   textData['pos_bigrams'] = [tuple(textData['pos_tags'][i:i+2][1]) for i in range(len(textData['pos_tags'])-2+1)]
@@ -112,11 +113,11 @@ def extractFeatures(textData):
   for t in textData['trigrams']:
     features['has_trigram_' + str(t)] = True
   # itertate set of tokens
-  for t in textData['token_set']:
+  for t in textData['token_set_no_stops']:
     # contains token at all
     features['has_word_' + t] = True
   # iterate all tokens
-  for t in textData['tokens']:
+  for t in textData['tokens_no_stops']:
     features['count_' + t.lower()] += 1
 
 
