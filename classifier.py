@@ -262,6 +262,7 @@ def runHttpServer():
   app.run()
 
 def calcTrainingMetrics(filename):
+  tmc = 0
   wordCounts = defaultdict(int)
   userCounts = defaultdict(int)
   with open(filename) as f:
@@ -280,14 +281,15 @@ def calcTrainingMetrics(filename):
         for t in textData['tokens_no_stops']:
           wordCounts[t.lower()] += 1
         userCounts[messageLine['from']['print_name']] += 1
+        tmc+=1
   
-  print("User Sampling")
+  print("User Sampling\n")
   userCounts = [ (k,v) for k, v in userCounts.items() ]
   userCounts.sort(key=lambda r: r[1], reverse=True)
-  print('Rank'.ljust(7) + 'Person'.ljust(25) + 'Sample Count')
-  print('-'*50)
+  print('Rank'.ljust(7) + 'Person'.ljust(25) + 'Sample Count'.ljust(15) + 'Sample Dist.')
+  print('-'*60)
   for i, v in enumerate(userCounts):
-    print((str(i+1) + '.').ljust(7) + str(v[0]).ljust(25) + str(v[1]))
+    print((str(i+1) + '.').ljust(7) + str(v[0]).ljust(25) + str(v[1]).ljust(15) + str(round(v[1]/tmc*100, 2)) + '%')
   
 
 def main():
