@@ -26,7 +26,7 @@ LOADED_MODEL = None
 LOADED_FEAT = None
 
 def initializeClassifier():
-  return SVC(kernel='linear', probability=True)
+  return SVC(kernel='linear', probability=True, class_weight='balanced')
 
 def runArgParser():
   '''parse commandline arguments'''
