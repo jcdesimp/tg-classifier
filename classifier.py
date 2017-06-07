@@ -13,9 +13,17 @@ from sklearn.externals import joblib
 import numpy
 import os
 
+from flask import Flask, jsonify, request
+
 MODEL_FILE = './data/trained_model.pkl'
 FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
 MIN_SAMPLE_SIZE = 5
+MIN_CLASSIFY_SIZE = 4
+
+
+# model cache
+LOADED_MODEL = None
+LOADED_FEAT = None
 
 def initializeClassifier():
   return SVC(kernel='linear', probability=True)
@@ -40,7 +48,10 @@ def runArgParser():
   parser_metrics = subparsers.add_parser('metrics', help='Print metrics about the given training or test data.')
   parser_metrics.add_argument('file', metavar='FILE', help='File containing training or test data.')
 
+  parser_metrics = subparsers.add_parser('http', help='Expose a simple restful API for classifying messages via a Flask HTTP server.')
+
   return parser.parse_args();
+
 
 def preprocessText(textString):
   '''given a telegram message, pre-process it and return a dictionary
@@ -189,19 +200,28 @@ def testModel(filename):
   acc = numpy.mean(test_pred == label_list) * 100
   print('Accuracy: ' + str(acc))
 
-def classifyMessage(message):
+
+def loadModelIfNot():
+  global LOADED_MODEL
+  global LOADED_FEAT
+  if not(LOADED_MODEL and LOADED_FEAT):
+    LOADED_MODEL = joblib.load(MODEL_FILE)
+    LOADED_FEAT = joblib.load(FEAT_VECTOR_FILE)
+  return LOADED_MODEL, LOADED_FEAT
 
 
+def classifyMessage(message, as_json=False):
   textData = preprocessText(message)
-  if len(textData['tokens']) < 4:
+
+  if len(textData['tokens']) < MIN_CLASSIFY_SIZE:
     print("Message too short to accurately classify!")
     return
   features = extractFeatures(textData)
 
-  feat_vector = joblib.load(FEAT_VECTOR_FILE)
+  classifier, feat_vector = loadModelIfNot()
+  
   X_test = feat_vector.transform([features])
 
-  classifier = joblib.load(MODEL_FILE)
   probs = classifier.predict_proba(X_test)
   results = []
   for i, v in enumerate(probs[0]):
@@ -209,8 +229,36 @@ def classifyMessage(message):
 
   results.sort(key=lambda r: r[1], reverse=True)
 
-  for r in results:
-    print(r[0].ljust(20), r[1]*100)
+  if as_json:
+    json_res = {}
+    json_res['message'] = message
+    json_res['classes'] = [ {'label': { 'print_name': r[0] }, 'probability': r[1] } for r in results ]
+    return json_res
+  else:
+    for r in results:
+      print(r[0].ljust(20), r[1]*100)
+
+def runHttpServer():
+  app = Flask(__name__)
+  loadModelIfNot()
+
+  @app.route('/')
+  def index():
+    return 'Classify messages at "/classify"'
+
+  @app.route('/classify')
+  def classify():
+    message = request.args.get('message')
+    if not(message):
+      err = {'error': "Message required"}
+      return jsonify(err), 400
+    if len(nltk.tokenize.word_tokenize(message)) < MIN_CLASSIFY_SIZE:
+      err = {'error': 'Message too short. Must be at least ' + str(MIN_CLASSIFY_SIZE) + ' words.'}
+      return jsonify(err), 400
+
+    return jsonify(classifyMessage(message, as_json=True))
+
+  app.run()
 
 def calcTrainingMetrics(filename):
   wordCounts = defaultdict(int)
@@ -252,6 +300,8 @@ def main():
     classifyMessage(args.message)
   elif args.command == 'metrics':
     calcTrainingMetrics(args.file)
+  elif args.command == 'http':
+    runHttpServer()
 
 
 
