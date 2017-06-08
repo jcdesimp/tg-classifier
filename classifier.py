@@ -14,6 +14,7 @@ import numpy
 import os
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 MODEL_FILE = './data/trained_model.pkl'
 FEAT_VECTOR_FILE = './data/model_feat_vector.pkl'
@@ -241,6 +242,7 @@ def classifyMessage(message, as_json=False):
 
 def runHttpServer():
   app = Flask(__name__)
+  cors = CORS(app)
   loadModelIfNot()
 
   @app.route('/')
