@@ -261,7 +261,7 @@ def runHttpServer():
 
     return jsonify(classifyMessage(message, as_json=True))
 
-  app.run()
+  app.run(port=int(os.environ.get('PORT') or '5000'))
 
 def calcTrainingMetrics(filename):
   tmc = 0
